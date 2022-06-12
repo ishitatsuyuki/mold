@@ -1138,6 +1138,10 @@ struct Elf64Sym {
     return st_shndx == SHN_UNDEF && st_bind == STB_WEAK;
   }
 
+  void kill() {
+    st_shndx = SHN_UNDEF;
+  }
+
   ul32 st_name;
   u8 st_type : 4;
   u8 st_bind : 4;
@@ -1160,6 +1164,10 @@ struct Elf32Sym {
 
   bool is_undef_weak() const {
     return st_shndx == SHN_UNDEF && st_bind == STB_WEAK;
+  }
+
+  void kill() {
+    st_shndx = SHN_UNDEF;
   }
 
   ul32 st_name;

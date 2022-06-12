@@ -168,7 +168,7 @@ static PluginStatus add_input_file(const char *path) {
   file->priority = file_priority++;
   file->is_alive = true;
   file->parse(ctx);
-  file->resolve_symbols(ctx);
+  // Symbol resolution will be done from scratch later.
   return LDPS_OK;
 }
 
@@ -603,6 +603,41 @@ ObjectFile<E> *read_lto_object(Context<E> &ctx, MappedFile<Context<E>> *mf) {
   return obj;
 }
 
+template <typename E>
+void fixup_lto_symbols(Context<E> &ctx, std::vector<ObjectFile<E> *> &objects) {
+  // Workaround an annoying GCC bug where GCC doesn't copy over the IR object's ELF fields properly, to prevent
+  // unexpected resolution errors from coming up.
+  // https://github.com/rui314/mold/issues/524
+
+  if (is_llvm(ctx))
+    return;
+
+//  tbb::parallel_for_each(objects, [&](ObjectFile<E> *file) {
+  std::for_each(objects.begin(), objects.end(), [&](ObjectFile<E> *file) {
+    for (i64 i = file->first_global; i < file->symbols.size(); i++) {
+      // As we haven't redone name resolution yet, `sym` should either point to the symbol from IR object or another
+      // symbol if it's overridden.
+      Symbol<E> *sym = file->symbols[i];
+      ElfSym<E> &elfsym = file->elf_syms[i];
+      if (sym->file == nullptr) {
+        // The LTO plugin introduced a brand new symbol. This doesn't really make sense, but let's just don't touch it.
+        continue;
+      }
+      ObjectFile<E> *symfile = dynamic_cast<ObjectFile<E> *>(sym->file);
+      if (symfile && symfile->is_lto_obj) {
+        // Override the symbol's attributes with the information from IR symbol.
+        elfsym.st_bind = sym->esym().st_bind;
+        elfsym.st_visibility = sym->esym().st_visibility;
+        // std::cerr << "Bind update: " << sym->name() << " in " << file->filename << " bind=" << (int)elfsym.st_bind << std::endl;
+      } else {
+        // std::cerr << "Kill: " << sym->name() << " overridden by: " << sym->file->filename << std::endl;
+        // IR Symbol did not win in resolution. Kill the LTO symbol as it shouldn't override any existing symbol either.
+        elfsym.kill();
+      }
+    }
+  });
+}
+
 // Entry point
 template <typename E>
 std::vector<ObjectFile<E> *> do_lto(Context<E> &ctx) {
@@ -636,7 +671,9 @@ std::vector<ObjectFile<E> *> do_lto(Context<E> &ctx) {
   if (PluginStatus st = all_symbols_read_hook(); st != LDPS_OK)
     Fatal(ctx) << "LTO: all_symbols_read_hook returns " << st;
 
-  return lto_objects<E>;
+  fixup_lto_symbols<E>(ctx, lto_objects<E>);
+
+  return std::move(lto_objects<E>);
 }
 
 template <typename E>
