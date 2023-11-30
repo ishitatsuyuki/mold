@@ -1532,6 +1532,25 @@ void create_reloc_sections(Context<E> &ctx) {
         ctx.chunks.push_back(x);
 }
 
+template <typename E> void prefault_files(Context<E> &ctx) {
+  {
+    Timer t(ctx, "prefault_input");
+    tbb::parallel_for_each(ctx.objs, [&](ObjectFile<E> *file) {
+      if (file->mf && !file->mf->parent)
+        prefault(ctx, file->mf->data, file->mf->size, false);
+    });
+  }
+  {
+    Timer t(ctx, "prefault_output");
+    u8 *buf = ctx.output_file->buf;
+    size_t size = ctx.output_file->filesize;
+    constexpr size_t chunk_size = 2 << 20;
+    tbb::parallel_for((size_t)0, size, chunk_size, [&](size_t offset) {
+      prefault(ctx, buf + offset, std::min(chunk_size, size - offset), true);
+    });
+  }
+}
+
 // Copy chunks to an output file
 template <typename E>
 void copy_chunks(Context<E> &ctx) {
@@ -2925,6 +2944,7 @@ template void claim_unresolved_symbols(Context<E> &);
 template void scan_relocations(Context<E> &);
 template void report_undef_errors(Context<E> &);
 template void create_reloc_sections(Context<E> &);
+template void prefault_files(Context<E> &);
 template void copy_chunks(Context<E> &);
 template void rewrite_endbr(Context<E> &);
 template void construct_relr(Context<E> &);

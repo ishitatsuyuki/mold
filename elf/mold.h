@@ -1389,6 +1389,7 @@ template <typename E> void construct_relr(Context<E> &);
 template <typename E> void create_output_symtab(Context<E> &);
 template <typename E> void report_undef_errors(Context<E> &);
 template <typename E> void create_reloc_sections(Context<E> &);
+template <typename E> void prefault_files(Context<E> &);
 template <typename E> void copy_chunks(Context<E> &);
 template <typename E> void rewrite_endbr(Context<E> &);
 template <typename E> void apply_version_script(Context<E> &);

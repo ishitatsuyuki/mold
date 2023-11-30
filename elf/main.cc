@@ -628,6 +628,8 @@ int elf_main(int argc, char **argv) {
 
   Timer t_copy(ctx, "copy");
 
+  prefault_files(ctx);
+
   // Copy input sections to the output file and apply relocations.
   copy_chunks(ctx);
 

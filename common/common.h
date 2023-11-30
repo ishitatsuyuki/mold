@@ -1075,4 +1075,20 @@ void MappedFile<Context>::unmap() {
   data = nullptr;
 }
 
+template <typename Context>
+void prefault(Context &ctx, void *data, size_t size, bool write) {
+#if defined(MADV_POPULATE_READ) && defined(MADV_POPULATE_WRITE)
+  static bool disable_populate = false;
+  if (!disable_populate &&
+      madvise(data, size, !write ? MADV_POPULATE_READ : MADV_POPULATE_WRITE) ==
+          -1) {
+    if (errno != EINVAL)
+      Error(ctx) << "madvise("
+                 << (!write ? "MADV_POPULATE_READ" : "MADV_POPULATE_WRITE")
+                 << ") failed: " << errno_string();
+    disable_populate = true;
+  }
+#endif
+}
+
 } // namespace mold
