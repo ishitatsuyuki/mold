@@ -24,22 +24,7 @@ open_or_create_file(Context &ctx, std::string path, i64 filesize, i64 perm) {
   if (fd == -1)
     Fatal(ctx) << "cannot open " << path2 <<  ": " << errno_string();
 
-  // Reuse an existing file if exists and writable because on Linux,
-  // writing to an existing file is much faster than creating a fresh
-  // file and writing to it.
-  if (ctx.overwrite_output_file && rename(path.c_str(), path2) == 0) {
-    ::close(fd);
-    fd = ::open(path2, O_RDWR | O_CREAT, perm);
-    if (fd != -1 && !ftruncate(fd, filesize) && !fchmod(fd, perm & ~get_umask()))
-      return {fd, path2};
-
-    unlink(path2);
-    fd = ::open(path2, O_RDWR | O_CREAT, perm);
-    if (fd == -1)
-      Fatal(ctx) << "cannot open " << path2 << ": " << errno_string();
-  }
-
-  if (ftruncate(fd, filesize))
+  if (posix_fallocate(fd, 0, filesize))
     Fatal(ctx) << "ftruncate failed: " << errno_string();
 
   if (fchmod(fd, (perm & ~get_umask())) == -1)
